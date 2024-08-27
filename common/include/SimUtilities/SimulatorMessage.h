@@ -20,55 +20,74 @@
 /*!
  * The mode for the simulator
  */
-enum class SimulatorMode {
-  RUN_CONTROL_PARAMETERS,  // don't run the robot controller, just process
-                           // Control Parameters
-  RUN_CONTROLLER,          // run the robot controller
-  DO_NOTHING,              // just to check connection
-  EXIT                     // quit!
+
+/**
+ * @brief 模拟器的模式
+ */
+enum class SimulatorMode
+{
+    RUN_CONTROL_PARAMETERS,  // don't run the robot controller, just process
+                             // Control Parameters
+    RUN_CONTROLLER,          // run the robot controller
+    DO_NOTHING,              // just to check connection
+    EXIT                     // quit!
 };
 
 /*!
  * A plain message from the simulator to the robot
  */
-struct SimulatorToRobotMessage {
-  GamepadCommand gamepadCommand;  // joystick
-  RobotType robotType;  // which robot the simulator thinks we are simulating
 
-  // imu data
-  VectorNavData vectorNav;
-  CheaterState<double> cheaterState;
+/**
+ * @brief 模拟器到机器人的消息
+ */
+struct SimulatorToRobotMessage
+{
+    GamepadCommand gamepadCommand;  // joystick
+    RobotType      robotType;       // which robot the simulator thinks we are simulating
 
-  // leg data
-  SpiData spiData;
-  TiBoardData tiBoardData[4];
-  // todo cheetah 3
-  ControlParameterRequest controlParameterRequest;
+    // imu data
+    VectorNavData        vectorNav;
+    CheaterState<double> cheaterState;
 
-  SimulatorMode mode;
+    // leg data
+    SpiData     spiData;
+    TiBoardData tiBoardData[4];
+    // todo cheetah 3
+    ControlParameterRequest controlParameterRequest;
+
+    SimulatorMode mode;
 };
 
 /*!
  * A plain message from the robot to the simulator
  */
-struct RobotToSimulatorMessage {
-  RobotType robotType;
-  SpiCommand spiCommand;
-  TiBoardCommand tiBoardCommand[4];
 
-  VisualizationData visualizationData;
-  CheetahVisualization mainCheetahVisualization;
-  ControlParameterResponse controlParameterResponse;
+/**
+ * @brief 从机器人到模拟器的消息
+ */
+struct RobotToSimulatorMessage
+{
+    RobotType      robotType;
+    SpiCommand     spiCommand;
+    TiBoardCommand tiBoardCommand[4];
 
-  char errorMessage[2056];
+    VisualizationData        visualizationData;
+    CheetahVisualization     mainCheetahVisualization;
+    ControlParameterResponse controlParameterResponse;
+
+    char errorMessage[2056];
 };
 
 /*!
  * All the data shared between the robot and the simulator
  */
-struct SimulatorMessage {
-  RobotToSimulatorMessage robotToSim;
-  SimulatorToRobotMessage simToRobot;
+/**
+ * @brief 机器人与模拟器之间的消息
+ */
+struct SimulatorMessage
+{
+    RobotToSimulatorMessage robotToSim;
+    SimulatorToRobotMessage simToRobot;
 };
 
 /*!
@@ -86,53 +105,96 @@ struct SimulatorMessage {
  *  - robot: waitForSimulator()
  *  ...
  */
-struct SimulatorSyncronizedMessage : public SimulatorMessage {
 
-  /*!
-   * The init() method should only be called *after* shared memory is connected!
-   * This initializes the shared memory semaphores used to keep things in sync
-   */
-  void init() {
-    robotToSimSemaphore.init(0);
-    simToRobotSemaphore.init(0);
-  }
+/**
+ * @brief 模拟器和机器人之间的共享消息
+ * @note 内部使用信号量来保证读写次序
+ */
+struct SimulatorSyncronizedMessage : public SimulatorMessage
+{
 
-  /*!
-   * Wait for the simulator to respond
-   */
-  void waitForSimulator() { simToRobotSemaphore.decrement(); }
+    /*!
+     * The init() method should only be called *after* shared memory is connected!
+     * This initializes the shared memory semaphores used to keep things in sync
+     */
+    void init()
+    {
+        robotToSimSemaphore.init(0);
+        simToRobotSemaphore.init(0);
+    }
 
-  /*!
-   * Simulator signals that it is done
-   */
-  void simulatorIsDone() { simToRobotSemaphore.increment(); }
+    /**
+     * @brief 等待模拟器响应
+     */
+    void waitForSimulator()
+    {
+        simToRobotSemaphore.decrement();
+    }
 
-  /*!
-   * Wait for the robot to finish
-   */
-  void waitForRobot() { robotToSimSemaphore.decrement(); }
+    /*!
+     * Simulator signals that it is done
+     */
 
-  /*!
-   * Check if the robot is done
-   * @return if the robot is done
-   */
-  bool tryWaitForRobot() { return robotToSimSemaphore.tryDecrement(); }
+    /**
+     * @brief 模拟器发出信号表示自己已经处理完毕
+     */
+    void simulatorIsDone()
+    {
+        simToRobotSemaphore.increment();
+    }
 
-  /*!
-   * Wait for the robot to finish with a timeout
-   * @return if we finished before timing out
-   */
-  bool waitForRobotWithTimeout() {
-    return robotToSimSemaphore.decrementTimeout(1, 0);
-  }
+    /*!
+     * Wait for the robot to finish
+     */
 
-  /*!
-   * Signal that the robot is done
-   */
-  void robotIsDone() { robotToSimSemaphore.increment(); }
+    /**
+     * @brief 等待机器人发出结束消息
+     */
+    void waitForRobot()
+    {
+        robotToSimSemaphore.decrement();
+    }
 
- private:
-  SharedMemorySemaphore robotToSimSemaphore, simToRobotSemaphore;
+    /*!
+     * Check if the robot is done
+     * @return if the robot is done
+     */
+
+    /**
+     * @brief 检测机器人是否处理完毕
+     */
+    bool tryWaitForRobot()
+    {
+        return robotToSimSemaphore.tryDecrement();
+    }
+
+    /*!
+     * Wait for the robot to finish with a timeout
+     * @return if we finished before timing out
+     */
+
+    /**
+     * @brief 在超时时间内等到机器人结束
+     */
+    bool waitForRobotWithTimeout()
+    {
+        return robotToSimSemaphore.decrementTimeout(1, 0);
+    }
+
+    /*!
+     * Signal that the robot is done
+     */
+
+    /**
+     * @brief 发出信号表示机器人结束
+     */
+    void robotIsDone()
+    {
+        robotToSimSemaphore.increment();
+    }
+
+private:
+    SharedMemorySemaphore robotToSimSemaphore, simToRobotSemaphore;  ///<<< 机器人和模拟器的信号量
 };
 
 #endif  // PROJECT_SIMULATORTOROBOTMESSAGE_H
